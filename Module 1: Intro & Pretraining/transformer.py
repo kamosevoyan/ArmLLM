@@ -13,41 +13,85 @@ class PositionalEncoding(nn.Module):
     def __init__(self, d_model, max_len=5000):
         super(PositionalEncoding, self).__init__()
         # Shape of pe: [1, max_len, d_model]
+        positional_encoding = torch.zeros(1, max_len, d_model)
+        position = torch.arange(0, max_len).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2) * -(math.log(10000.0) / d_model))
+        positional_encoding[:, :, 0::2] = torch.sin(position * div_term)
+        positional_encoding[:, :, 1::2] = torch.cos(position * div_term)
+        self.register_buffer("positional_encoding", positional_encoding.unsqueeze(0))
 
     def forward(self, x):
         # x shape: [batch_size, seq_len, d_model]
         # pe[:, :x.size(1)] shape: [1, seq_len, d_model]
-        raise NotImplementedError
+        return x + self.positional_encoding[:, :x.size(1)]
         # Shape remains [batch_size, seq_len, d_model]
 
 class MultiHeadAttention(nn.Module):
     def __init__(self, d_model, num_heads):
         super().__init__()
+        assert d_model % num_heads == 0, "The parameter `d_model` must be divisble by `num_heads`"
+        self.num_heads = num_heads
+        self.d_k = d_model // num_heads
+
+        self.W_q = nn.Linear(d_model, d_model, bias=False)
+        self.W_k = nn.Linear(d_model, d_model, bias=False)
+        self.W_v = nn.Linear(d_model, d_model, bias=False)
+        self.W_o = nn.Linear(d_model, d_model, bias=False)
 
     def scaled_dot_product_attention(self, Q, K, V):
-        # Q, K, V shapes: [batch_size, num_heads, seq_len, d_k]
-        raise NotImplementedError
+        # shapes: [batch_size, num_heads, seq_len, d_k]
+        attn_s = torch.matmul(Q, K.transpose(-2, -1)) / (self.d_k ** 0.5) 
+        attn_probs = torch.softmax(attn_s, dim=-1)
+        output = torch.matmul(attn_probs, V)
+
+        return output
         # Shape: [batch_size, num_heads, seq_len, d_k]
 
     def forward(self, Q, K, V):
-        raise NotImplementedError
+        batch_size = Q.size(0)
+
+        Q = self.W_q(Q).view(batch_size, -1, self.num_heads, self.d_k).transpose(1, 2)
+        K = self.W_k(K).view(batch_size, -1, self.num_heads, self.d_k).transpose(1, 2)
+        V = self.W_v(V).view(batch_size, -1, self.num_heads, self.d_k).transpose(1, 2)
+
+        output = self.scaled_dot_product_attention(Q, K, V)
+        output = output.transpose(1, 2).contiguous().view(batch_size, -1, self.num_heads * self.d_k)
+
+        
+        return self.W_o(output)
 
 class PositionWiseFeedForward(nn.Module):
     def __init__(self, d_model, d_ff):
         super().__init__()
         # TODO: Implement the feed-forward network
+        self.fc1 = nn.Linear(d_model, d_ff, bias=False)
+        self.fc2 = nn.Linear(d_ff, d_model, bias=False)
+        self.relu = nn.ReLU()
+
     def forward(self, x):
         # x shape: [batch_size, seq_len, d_model]
-        raise NotImplementedError
+        x = self.fc1(x)
+        x = self.relu(x)
+        x = self.fc2(x)
+        return x
 
 class EncoderLayer(nn.Module):
     def __init__(self, d_model, num_heads, d_ff):
         super().__init__()
+        self.feed_forward = PositionWiseFeedForward(d_model, d_ff)
+        self.self_attn = MultiHeadAttention(d_model, num_heads)
+
+        self.norm1 = nn.LayerNorm(d_model)
+        self.norm2 = nn.LayerNorm(d_model)
 
     def forward(self, x):
         # x shape: [batch_size, seq_len, d_model]
-        raise NotImplementedError
+        attn_output = self.self_attn(x, x, x)
         # Shape: [batch_size, seq_len, d_model]
+        x = self.norm1(x + attn_output)
+        ff_output = self.feed_forward(x)
+        x = self.norm2(x + ff_output)
+        return x
 
 class TransformerEncoder(nn.Module):
     def __init__(self, img_size, patch_size, d_model, num_heads, num_layers, d_ff, num_classes):
@@ -56,9 +100,17 @@ class TransformerEncoder(nn.Module):
         self.num_patches = (img_size // patch_size) ** 2
         self.patch_dim = 3 * patch_size * patch_size
 
+        self.encoder_layers = nn.ModuleList(
+            [EncoderLayer(d_model, num_heads, d_ff) for _ in range(num_layers)]
+        )
+
+        self.norm = nn.LayerNorm(d_model)
+
+        self.positional_embedding = PositionalEncoding(d_model, self.num_patches)
+
         self.patch_embedding = nn.Linear(self.patch_dim, d_model)
         self.fc = nn.Linear(d_model, num_classes)
-
+    
     def patchify(self, images):
         # images shape: [batch_size, channels, height, width]
         batch_size = images.shape[0]
@@ -72,7 +124,9 @@ class TransformerEncoder(nn.Module):
         x = self.patchify(x)  # Shape: [batch_size, num_patches, patch_dim]
         x = self.patch_embedding(x)  # Shape: [batch_size, num_patches, d_model]
         # TODO: positional embedding, layers, norm,
-        raise NotImplementedError
+        for layer in self.encoder_layers:
+            x = layer(x)
+        x = self.norm(x)
         x = x.mean(dim=1)  # Take the mean across patches
         return self.fc(x)  # Shape: [batch_size, num_classes]
 
