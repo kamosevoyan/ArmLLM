@@ -19,11 +19,11 @@ In this session, we will:
 
 Install the required packages using:
 
-pip install torch torchvision transformers datasets
+`pip install torch torchvision transformers datasets`
 
 ## Implementation Details
 
-The `transformer.py` script contains:
+The `train.py` script contains:
 - A custom implementation of the Transformer Encoder (that you will implement)
 - Data loading and preprocessing using Hugging Face datasets
 - Training loop for the transformer on ImageNet
