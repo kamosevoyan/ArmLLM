@@ -17,16 +17,16 @@ def main():
     img_size: int = 224
     patch_size: int = 16
 
-    num_layers: int = 4
+    num_layers: int = 8
     num_heads: int = 4
-    d_model: int = 2048
-    d_ff: int = 2048
+    d_model: int = 1024
+    d_ff: int = 1024
 
     num_epochs: int = 100
-    batch_size: int = 1024
+    batch_size: int = 128
 
     learning_rate: float = 1e-4
-    weight_decay: float = 5e-4
+    weight_decay: float = 5e-5
 
     train_data, validation_data = load_and_preprocess_data()
 
@@ -34,7 +34,7 @@ def main():
         train_data,
         batch_size=batch_size,
         shuffle=True,
-        num_workers=16,
+        num_workers=20,
         persistent_workers=True,
     )
 
@@ -55,7 +55,7 @@ def main():
         optimizer, mode="min", patience=15, cooldown=5, min_lr=1e-7
     )
 
-    writer = SummaryWriter("../runs")
+    writer = SummaryWriter("../runs/exp4", flush_secs=5)
 
     for epoch in tqdm(range(num_epochs), desc="Training"):
         train_acc, train_loss = train(model, train_loader, criterion, optimizer, device)

@@ -1,12 +1,12 @@
 import torch
-from datasets import DatasetDict, load_dataset
-from torch.utils.data import DataLoader
+from datasets import load_dataset, DatasetDict
 from transformers import AutoImageProcessor
+from torch.utils.data import DataLoader
 
-
-def load_and_preprocess_data() -> tuple[DatasetDict]:
-
-    dataset = load_dataset("chriamue/bird-species-dataset", split="train[:5%]")
+def load_and_preprocess_data(
+    )->tuple[DatasetDict]:
+    
+    dataset = load_dataset("chriamue/bird-species-dataset", split="train[:20%]")
     train_dataset = dataset.train_test_split(test_size=0.1)
 
     image_processor = AutoImageProcessor.from_pretrained("google/vit-base-patch16-224")
@@ -31,13 +31,12 @@ def load_and_preprocess_data() -> tuple[DatasetDict]:
     return train_dataset["train"], train_dataset["test"]
 
 
-def validate(
-    model: torch.nn.Module,
-    dataloader: DataLoader,
-    criterion: torch.nn.Module,
-    device: torch.device,
-) -> tuple[int]:
-
+def validate(model: torch.nn.Module, 
+             dataloader: DataLoader, 
+             criterion: torch.nn.Module, 
+             device: torch.device
+    )->tuple[int]:
+    
     model.eval()
     total = 0
     correct = 0
@@ -56,25 +55,23 @@ def validate(
 
     accuracy = 100 * correct / total
     average_loss = total_loss / len(dataloader)
-
+    
     return accuracy, average_loss
 
-
-def train(
-    model: torch.nn.Module,
-    dataloader: DataLoader,
-    criterion: torch.nn.Module,
-    optimizer: torch.optim.Optimizer,
-    device: torch.device,
-) -> tuple[int]:
-
+def train(model: torch.nn.Module, 
+          dataloader: DataLoader, 
+          criterion: torch.nn.Module, 
+          optimizer: torch.optim.Optimizer, 
+          device: torch.device
+    )->tuple[int]:
+    
     model.train()
     total = 0
     correct = 0
     total_loss = 0
 
     for batch in dataloader:
-        inputs, labels = batch["pixel_values"].to(device), batch["label"].to(device)
+        inputs, labels = batch["pixel_values"].to(device), batch["label"].to(device)        
         optimizer.zero_grad()
         outputs = model(inputs)
         loss = criterion(outputs, labels)
@@ -89,5 +86,5 @@ def train(
 
     accuracy = 100 * correct / total
     average_loss = total_loss / len(dataloader)
-
+    
     return accuracy, average_loss
