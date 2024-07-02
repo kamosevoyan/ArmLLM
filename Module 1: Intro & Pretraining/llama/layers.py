@@ -4,6 +4,8 @@ from typing import Optional
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch import Tensor
+
 from config import ModelArgs
 from utils import apply_rotary_emb, find_multiple, repeat_kv
 
@@ -15,10 +17,10 @@ class RMSNorm(nn.Module):
         self.eps = eps
         self.gamma = nn.Parameter(torch.ones(dim))
 
-    def forward(self, x):
+    def forward(self, x: Tensor):
 
-        rms = torch.rsqrt(x.float().pow(2).mean(dim=-1, keepdim=True) + self.eps)
-        x = rms.type_as(rms) * self.gamma
+        denominator = torch.rsqrt(x.pow(2).mean(dim=-1, keepdim=True) + self.eps)
+        x = x * denominator * self.gamma
 
         return x
 
@@ -38,9 +40,7 @@ class Attention(nn.Module):
         self.wv = nn.Linear(args.dim, args.n_kv_heads * self.head_dim, bias=False)
         self.wo = nn.Linear(args.n_heads * self.head_dim, args.dim, bias=False)
 
-    def forward(
-        self, x: torch.Tensor, freqs_cis: torch.Tensor, mask: Optional[torch.Tensor]
-    ):
+    def forward(self, x: Tensor, freqs_cis: Tensor, mask: Optional[Tensor]):
         bsz, seqlen, _ = x.shape
 
         # Compute Q, K, V
@@ -54,14 +54,14 @@ class Attention(nn.Module):
         # Apply rotary positional embedding
         xq, xk = apply_rotary_emb(xq, xk, freqs_cis=freqs_cis)
 
+        # Repeat K and V for multi-query attention
+        xk = repeat_kv(xk, self.n_rep)  # (bs, n_heads_q, seqlen, head_dim)
+        xv = repeat_kv(xv, self.n_rep)  # (bs, n_heads_q, seqlen, head_dim)
+                
         # Transpose for attention computation
         xq = xq.transpose(1, 2)  # (bs, n_heads_q, seqlen, head_dim)
         xk = xk.transpose(1, 2)  # (bs, n_kv_heads, seqlen, head_dim)
         xv = xv.transpose(1, 2)  # (bs, n_kv_heads, seqlen, head_dim)
-
-        # Repeat K and V for multi-query attention
-        xk = repeat_kv(xk, self.n_rep)  # (bs, n_heads_q, seqlen, head_dim)
-        xv = repeat_kv(xv, self.n_rep)  # (bs, n_heads_q, seqlen, head_dim)
 
         # Compute attention scores
         scores = torch.matmul(xq, xk.transpose(2, 3)) / math.sqrt(self.head_dim)
@@ -85,7 +85,7 @@ class FeedForward(nn.Module):
         self.w2 = nn.Linear(hidden_dim, dim, bias=False)
         self.w3 = nn.Linear(dim, hidden_dim, bias=False)
 
-    def forward(self, x):
+    def forward(self, x: Tensor):
         return self.w2(F.silu(self.w1(x)) * self.w3(x))
 
 

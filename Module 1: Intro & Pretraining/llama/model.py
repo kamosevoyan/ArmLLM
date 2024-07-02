@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+
 from config import ModelArgs
 from layers import RMSNorm, TransformerBlock
 from utils import precompute_freqs_cis
@@ -24,7 +25,7 @@ class Transformer(nn.Module):
             self.params.dim // self.params.n_heads, self.params.max_seq_len * 2
         )
 
-    def forward(self, tokens: torch.Tensor, start_pos: int):
+    def forward(self, tokens: torch.Tensor, start_pos: int = 0):
         _bsz, seqlen = tokens.shape
         h = self.tok_embeddings(tokens)
         self.freqs_cis = self.freqs_cis.to(h.device)

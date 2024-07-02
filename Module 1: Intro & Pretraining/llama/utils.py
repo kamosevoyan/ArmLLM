@@ -1,12 +1,14 @@
 import torch
 from datasets import load_dataset
+from torch import Tensor
 from torch.utils.data import DataLoader
 from transformers import AutoTokenizer
 
 
 # Helper function to repeat key/value heads
-def repeat_kv(x: torch.Tensor, n_rep: int) -> torch.Tensor:
-    """torch.repeat_interleave(x, dim=2, repeats=n_rep)"""
+def repeat_kv(x: Tensor, n_rep: int) -> Tensor:
+    
+    # return torch.repeat_interleave(x, dim=1, repeats=n_rep)
     bs, slen, n_kv_heads, head_dim = x.shape
     if n_rep == 1:
         return x
@@ -35,8 +37,8 @@ def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0):
 
 # Apply rotary positional embedding
 def apply_rotary_emb(
-    xq: torch.Tensor, xk: torch.Tensor, freqs_cis: torch.Tensor
-) -> tuple[torch.Tensor, torch.Tensor]:
+    xq: Tensor, xk: Tensor, freqs_cis: Tensor
+) -> tuple[Tensor, Tensor]:
     xq_ = torch.view_as_complex(xq.float().reshape(*xq.shape[:-1], -1, 2))
     xk_ = torch.view_as_complex(xk.float().reshape(*xk.shape[:-1], -1, 2))
     freqs_cis = freqs_cis[:, None, :]
@@ -45,8 +47,8 @@ def apply_rotary_emb(
     return xq_out.type_as(xq), xk_out.type_as(xk)
 
 
-def create_dataloader(batch_size, max_seq_len):
-    dataset = load_dataset("wikitext", "wikitext-103-v1", split="train[:10%]")
+def create_dataloader(batch_size: int, max_seq_len: int) -> DataLoader:
+    dataset = load_dataset("wikitext", "wikitext-103-v1", split="train[:]")
     tokenizer = AutoTokenizer.from_pretrained("gpt2")
 
     tokenizer.pad_token = tokenizer.eos_token

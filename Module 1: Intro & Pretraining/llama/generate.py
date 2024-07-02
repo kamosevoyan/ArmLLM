@@ -1,11 +1,19 @@
 import torch
+from torch import device
+from torch.nn import Module
+from transformers import AutoTokenizer
+
 from config import ModelArgs
 from model import Transformer
-from transformers import AutoTokenizer
 
 
 def generate_text_greedy(
-    model, tokenizer, prompt, device, max_length=50, temperature=1.0
+    model: Module,
+    tokenizer: AutoTokenizer,
+    prompt: str,
+    device: device,
+    max_length: int = 50,
+    temperature: float = 1.0,
 ):
     model.eval()
     tokenized_prompt = tokenizer.encode(prompt, return_tensors="pt").to(device)
@@ -24,7 +32,12 @@ def generate_text_greedy(
 
 
 def generate_text_sampling(
-    model, tokenizer, prompt, device, max_length=50, temperature=1.0
+    model: Module,
+    tokenizer: AutoTokenizer,
+    prompt: str,
+    device: device,
+    max_length: int = 50,
+    temperature: float = 1.0,
 ):
     model.eval()
     tokenized_prompt = tokenizer.encode(prompt, return_tensors="pt").to(device)
@@ -45,7 +58,13 @@ def generate_text_sampling(
 
 
 def generate_text_topk(
-    model, tokenizer, prompt, device, max_length=50, temperature=1.0, topk=50
+    model: Module,
+    tokenizer: AutoTokenizer,
+    prompt: str,
+    device: device,
+    max_length: int = 50,
+    temperature: float = 1.0,
+    topk: int = 50,
 ):
     model.eval()
     tokenized_prompt = tokenizer.encode(prompt, return_tensors="pt").to(device)
@@ -71,7 +90,13 @@ def generate_text_topk(
 
 
 def generate_text_topp(
-    model, tokenizer, prompt, device, max_length=50, temperature=1.0, topp=0.9
+    model: Module,
+    tokenizer: AutoTokenizer,
+    prompt: str,
+    device: device,
+    max_length: int = 50,
+    temperature: float = 1.0,
+    topp: float = 0.9,
 ):
     model.eval()
     tokenized_prompt = tokenizer.encode(prompt, return_tensors="pt").to(device)
@@ -107,28 +132,28 @@ def main():
 
     model_args = ModelArgs(
         dim=512,
-        n_layers=4,
+        n_layers=8,
         n_heads=8,
-        n_kv_heads=8,
+        n_kv_heads=4,
         multiple_of=32,
-        max_seq_len=256,
+        max_seq_len=128,
         max_batch_size=256,
         vocab_size=50257,
     )
-
+    
     tokenizer = AutoTokenizer.from_pretrained("gpt2")
     tokenizer.pad_token = tokenizer.eos_token
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = Transformer(model_args).to(device)
 
-    path = "/home/kamo/resources/ArmLLM/Module 1: Intro & Pretraining/llama_wikitext_trained.pth"
-    weights = torch.load(path, map_location=device)
-    model.load_state_dict(weights)
+    # path = "/home/kamo/resources/ArmLLM/Module 1: Intro & Pretraining/llama/llama_wikitext_trained.pth"
+    # weights = torch.load(path, map_location=device)
+    # model.load_state_dict(weights)
 
-    prompt = "In a world where"
-    generated_text = generate_text_greedy(
-        model, tokenizer, prompt, device, max_length=50
+    prompt = "1 2 3 4 5 6 7"#input("Input:\t")
+    generated_text = generate_text_sampling(
+        model, tokenizer, prompt, device, max_length=200, temperature=1
     )
 
     print(f"Prompt: {prompt}")
