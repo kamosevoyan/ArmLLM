@@ -79,6 +79,8 @@ def generate_text_topk(
             proba.scatter_(index=topk_indices, src=topk_values, dim=-1)
             proba = torch.softmax(proba, dim=-1)
             next_token = torch.multinomial(proba, 1)
+            
+            print(f"next token probability:\t{proba[0, next_token[0]]}")
 
             tokenized_prompt = torch.cat([tokenized_prompt, next_token], dim=-1)
             if next_token.item() == tokenizer.eos_token_id:
@@ -131,33 +133,33 @@ def generate_text_topp(
 def main():
 
     model_args = ModelArgs(
-        dim=512,
+        dim=1024,
         n_layers=8,
-        n_heads=8,
+        n_heads=16,
         n_kv_heads=4,
         multiple_of=32,
         max_seq_len=128,
         max_batch_size=256,
         vocab_size=50257,
     )
-    
+
     tokenizer = AutoTokenizer.from_pretrained("gpt2")
     tokenizer.pad_token = tokenizer.eos_token
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = Transformer(model_args).to(device)
 
-    # path = "/home/kamo/resources/ArmLLM/Module 1: Intro & Pretraining/llama/llama_wikitext_trained.pth"
-    # weights = torch.load(path, map_location=device)
-    # model.load_state_dict(weights)
+    path = "./llama_wikitext_trained.pth"
+    weights = torch.load(path, map_location=device)
+    model.load_state_dict(weights)
 
-    prompt = "1 2 3 4 5 6 7"#input("Input:\t")
-    generated_text = generate_text_sampling(
-        model, tokenizer, prompt, device, max_length=200, temperature=1
+    prompt = input("Input:\n")
+    generated_text = generate_text_topk(
+        model, tokenizer, prompt, device, max_length=200
     )
 
     print(f"Prompt: {prompt}")
-    print(f"Generated text: {generated_text}")
+    print(f"Generated text:\n{generated_text}")
 
 
 if __name__ == "__main__":

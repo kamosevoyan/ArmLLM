@@ -76,9 +76,9 @@ def train(
 def main():
 
     model_args = ModelArgs(
-        dim=512,
+        dim=1024,
         n_layers=8,
-        n_heads=8,
+        n_heads=16,
         n_kv_heads=4,
         multiple_of=32,
         max_seq_len=128,
