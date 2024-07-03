@@ -26,29 +26,24 @@ class TransformerEncoder(nn.Module):
         )
 
         self.norm = nn.LayerNorm(d_model)
-
         self.positional_embedding = PositionalEncoding(d_model, self.num_patches)
-
         self.patch_embedding = nn.Linear(self.patch_dim, d_model)
         self.fc = nn.Linear(d_model, num_classes)
 
     def __patchify(self, images: torch.Tensor):
-        # images shape: [batch_size, channels, height, width]
         batch_size = images.shape[0]
-        # patches shape: [batch_size, num_patches, patch_dim]
         patches = images.unfold(2, self.patch_size, self.patch_size).unfold(
             3, self.patch_size, self.patch_size
         )
         patches = patches.contiguous().view(batch_size, -1, self.patch_dim)
-        return patches  # Shape: [batch_size, num_patches, patch_dim]
+        return patches
 
     def forward(self, x: torch.Tensor):
-        # x shape: [batch_size, channels, height, width]
-        x = self.__patchify(x)  # Shape: [batch_size, num_patches, patch_dim]
-        x = self.patch_embedding(x)  # Shape: [batch_size, num_patches, d_model]
-        # TODO: positional embedding, layers, norm,
+        x = self.__patchify(x)
+        x = self.patch_embedding(x)
+        x = self.positional_embedding(x)
         for layer in self.encoder_layers:
             x = layer(x)
         x = self.norm(x)
-        x = x.mean(dim=1)  # Take the mean across patches
-        return self.fc(x)  # Shape: [batch_size, num_classes]
+        x = x.mean(dim=1)
+        return self.fc(x)

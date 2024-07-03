@@ -3,7 +3,6 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
-from tqdm import tqdm
 
 from model import TransformerEncoder
 from utils import load_and_preprocess_data, train, validate
@@ -12,18 +11,17 @@ from utils import load_and_preprocess_data, train, validate
 def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # Hyperparameters
     num_classes: int = 525
     img_size: int = 224
     patch_size: int = 16
 
     num_layers: int = 8
     num_heads: int = 4
-    d_model: int = 1024
+    d_model: int = 512
     d_ff: int = 1024
 
     num_epochs: int = 100
-    batch_size: int = 128
+    batch_size: int = 256
 
     learning_rate: float = 1e-4
     weight_decay: float = 5e-5
@@ -55,10 +53,10 @@ def main():
         optimizer, mode="min", patience=15, cooldown=5, min_lr=1e-7
     )
 
-    writer = SummaryWriter("../runs/exp4", flush_secs=5)
+    writer = SummaryWriter("../../runs/exp0", flush_secs=5)
 
-    for epoch in tqdm(range(num_epochs), desc="Training"):
-        train_acc, train_loss = train(model, train_loader, criterion, optimizer, device)
+    for epoch in range(num_epochs):
+        train_acc, train_loss = train(epoch, model, train_loader, criterion, optimizer, device)
         val_acc, val_loss = validate(model, validation_loader, criterion, device)
         scheduler.step(val_loss)
 
