@@ -70,7 +70,7 @@ class ViTEncoder(nn.Module):
         )
         self.pos_encoding = PositionalEncoding2D(embedding_dim)
         self.transformer = nn.TransformerEncoder(
-            nn.TransformerEncoderLayer(d_model=embedding_dim, nhead=num_heads),
+            nn.TransformerEncoderLayer(d_model=embedding_dim, nhead=num_heads, batch_first=True),
             num_layers=num_layers,
         )
         self.norm = nn.LayerNorm(embedding_dim)
@@ -94,8 +94,8 @@ class ViTDecoder(nn.Module):
     ):
         super().__init__()
         self.pos_encoding = PositionalEncoding2D(embedding_dim)
-        self.transformer = nn.TransformerDecoder(
-            nn.TransformerDecoderLayer(d_model=embedding_dim, nhead=num_heads),
+        self.transformer = nn.TransformerEncoder(
+            nn.TransformerEncoderLayer(d_model=embedding_dim, nhead=num_heads, batch_first=True),
             num_layers=num_layers,
         )
         self.norm = nn.LayerNorm(embedding_dim)
@@ -108,13 +108,14 @@ class ViTDecoder(nn.Module):
         pos_encoding = self.pos_encoding(x)
         x = x + pos_encoding
         x = x.view(x.size(0), -1, x.size(-1))  # (B, H*W, C)
-        x = self.transformer(x, x)
+        x = self.transformer(x)
         x = self.norm(x)
         x = x.view(
             x.size(0), int(x.size(1) ** 0.5), int(x.size(1) ** 0.5), x.size(2)
         ).permute(0, 3, 1, 2)
         x = self.unpatch(x)
         return torch.sigmoid(x)
+        # return x
 
 
 class VectorQuantizer(nn.Module):
@@ -135,9 +136,9 @@ class VectorQuantizer(nn.Module):
         z_flattened = z.view(-1, self.e_dim)
 
         # or maybe swap the order
-        d = torch.cdist(z_flattened, self.embedding.weight)
+        distances = torch.cdist(z_flattened, self.embedding.weight)
         
-        min_encoding_indices = torch.argmin(d, dim=1).unsqueeze(1)
+        min_encoding_indices = torch.argmin(distances, dim=1).unsqueeze(1)
         min_encodings = torch.zeros(min_encoding_indices.shape[0], self.n_e).to(
             z.device
         )
@@ -147,12 +148,18 @@ class VectorQuantizer(nn.Module):
         self.usage += min_encodings.sum(0)
 
         z_q = torch.matmul(min_encodings, self.embedding.weight).view(z.shape)
-
-        # TODO: loss = ...        
-        
+                
         loss =  F.mse_loss(z_q.detach(), z)
         loss += self.beta * F.mse_loss(z.detach(), z_q)
-        loss
+        
+        ################
+        # calculate prob over distances
+        TEMPERATURE = 1/1000
+        probs = torch.softmax(-distances/TEMPERATURE, dim=-1)
+        dvl = -(-probs * torch.log_softmax(-distances/TEMPERATURE, dim=-1)).sum(dim=-1).mean()
+        print(f"{torch.exp(dvl)}")
+        loss += torch.exp(dvl)
+        ###
         
         z_q = z + (z_q - z).detach()
         
@@ -188,41 +195,12 @@ class ViT_VQVAE(nn.Module):
     def forward(self, x):
         z = self.encoder(x)
         vq_loss, quantized, perplexity, _, _ = self.vq(z)
-        x_recon = self.decoder(quantized)
-        return x_recon, vq_loss, z, quantized, perplexity
-    
-    # def compute_diversity_loss(self):                
-        
-    #     a = self.vq.embedding.weight.unsqueeze(0)
-    #     b = self.vq.embedding.weight.unsqueeze(1)
-        
-    #     cs = torch.cosine_similarity(a, b, dim=-1)
-        
-    #     n = cs.shape[0]
-    #     tmp = cs*(1 - torch.eye(n, device=cs.device, dtype=cs.dtype))
-    #     loss = ((1-tmp)**2).sum() / (n*(n - 1))
-                
-    #     return loss
-    
-    # def compute_diversity_loss(self):                
-        
-    #     a = self.vq.embedding.weight        
-        
-    #     cs = torch.cdist(a, a)        
-        
-    #     n = cs.shape[0]
-    #     tmp = cs*(1 - torch.eye(n, device=cs.device, dtype=cs.dtype))
-    #     loss = tmp.sum()
-                
-    #     return -loss
-    
-    def compute_diversity_loss(self):
-        
-        return torch.norm(self.vq.embedding.weight, dim=-1).sum()
+        x_recon = self.decoder(z)        
+        return x_recon, vq_loss, z, quantized, perplexity        
     
     def calculate_loss(self, x, x_recon, vq_loss):
         recon_loss = F.mse_loss(x_recon, x)
-        total_loss = recon_loss + vq_loss + self.compute_diversity_loss()
+        total_loss = recon_loss + vq_loss
         return total_loss, recon_loss, vq_loss
 
     def print_codebook_utilization(self):
