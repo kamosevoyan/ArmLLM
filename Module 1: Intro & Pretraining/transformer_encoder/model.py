@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-
 from encoding import PositionalEncoding
 from layers import EncoderLayer
 

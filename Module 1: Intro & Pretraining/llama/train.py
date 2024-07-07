@@ -3,6 +3,8 @@ from dataclasses import asdict
 
 import torch
 import torch.nn.functional as F
+from config import ModelArgs
+from model import Transformer
 from torch import device
 from torch.nn import Module
 from torch.optim import Optimizer
@@ -11,9 +13,6 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 from transformers import AutoTokenizer
-
-from config import ModelArgs
-from model import Transformer
 from utils import create_dataloader
 
 

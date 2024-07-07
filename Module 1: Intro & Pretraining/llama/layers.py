@@ -4,9 +4,8 @@ from typing import Optional
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch import Tensor
-
 from config import ModelArgs
+from torch import Tensor
 from utils import apply_rotary_emb, find_multiple, repeat_kv
 
 
@@ -57,7 +56,7 @@ class Attention(nn.Module):
         # Repeat K and V for multi-query attention
         xk = repeat_kv(xk, self.n_rep)  # (bs, n_heads_q, seqlen, head_dim)
         xv = repeat_kv(xv, self.n_rep)  # (bs, n_heads_q, seqlen, head_dim)
-                
+
         # Transpose for attention computation
         xq = xq.transpose(1, 2)  # (bs, n_heads_q, seqlen, head_dim)
         xk = xk.transpose(1, 2)  # (bs, n_kv_heads, seqlen, head_dim)

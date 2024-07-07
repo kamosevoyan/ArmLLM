@@ -9,14 +9,22 @@ import torch.nn.functional as F
 from accelerate.utils import is_deepspeed_available
 from datasets import Dataset
 from torch.utils.data import DataLoader
-from transformers import DataCollator, PreTrainedModel, PreTrainedTokenizerBase, Trainer, TrainingArguments
+from transformers import (
+    DataCollator,
+    PreTrainedModel,
+    PreTrainedTokenizerBase,
+    Trainer,
+    TrainingArguments,
+)
 from transformers.trainer_callback import TrainerCallback
 from transformers.trainer_utils import EvalLoopOutput
-
 from trl.import_utils import is_peft_available, is_wandb_available
 from trl.models import PreTrainedModelWrapper, create_reference_model
-from trl.trainer.utils import DPODataCollatorWithPadding, disable_dropout_in_model, pad_to_length
-
+from trl.trainer.utils import (
+    DPODataCollatorWithPadding,
+    disable_dropout_in_model,
+    pad_to_length,
+)
 
 if is_peft_available():
     from peft import PeftModel, get_peft_model, prepare_model_for_kbit_training
@@ -106,7 +114,9 @@ class CPOTrainer(Trainer):
             None,
             None,
         ),
-        preprocess_logits_for_metrics: Optional[Callable[[torch.Tensor, torch.Tensor], torch.Tensor]] = None,
+        preprocess_logits_for_metrics: Optional[
+            Callable[[torch.Tensor, torch.Tensor], torch.Tensor]
+        ] = None,
         max_length: Optional[int] = None,
         max_prompt_length: Optional[int] = None,
         max_target_length: Optional[int] = None,
@@ -121,8 +131,12 @@ class CPOTrainer(Trainer):
                 "PEFT is not installed and you passed a `peft_config` in the trainer's kwargs, please install it to use the PEFT models"
             )
         elif is_peft_available() and peft_config is not None:
-            if getattr(model, "is_loaded_in_8bit", False) or getattr(model, "is_loaded_in_4bit", False):
-                model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=args.gradient_checkpointing)
+            if getattr(model, "is_loaded_in_8bit", False) or getattr(
+                model, "is_loaded_in_4bit", False
+            ):
+                model = prepare_model_for_kbit_training(
+                    model, use_gradient_checkpointing=args.gradient_checkpointing
+                )
             model = get_peft_model(model, peft_config)
 
         if generate_during_eval and not is_wandb_available():
@@ -134,7 +148,9 @@ class CPOTrainer(Trainer):
         if model is not None:
             self.is_encoder_decoder = model.config.is_encoder_decoder
         elif is_encoder_decoder is None:
-            raise ValueError("When no model is provided, you need to pass the parameter is_encoder_decoder.")
+            raise ValueError(
+                "When no model is provided, you need to pass the parameter is_encoder_decoder."
+            )
         else:
             self.is_encoder_decoder = is_encoder_decoder
 
@@ -235,14 +251,21 @@ class CPOTrainer(Trainer):
                     if getattr(model.config, "hidden_sizes", None)
                     else getattr(model.config, "hidden_size", None)
                 )
-                if hidden_size is not None and config_kwargs["zero_optimization"]["stage"] == 3:
+                if (
+                    hidden_size is not None
+                    and config_kwargs["zero_optimization"]["stage"] == 3
+                ):
                     # Note that `stage3_prefetch_bucket_size` can produce DeepSpeed messages like: `Invalidate trace cache @ step 0: expected module 1, but got module 0`
                     # This is expected and is not an error, see: https://github.com/microsoft/DeepSpeed/discussions/4081
                     config_kwargs.update(
                         {
-                            "zero_optimization.reduce_bucket_size": hidden_size * hidden_size,
-                            "zero_optimization.stage3_param_persistence_threshold": 10 * hidden_size,
-                            "zero_optimization.stage3_prefetch_bucket_size": 0.9 * hidden_size * hidden_size,
+                            "zero_optimization.reduce_bucket_size": hidden_size
+                            * hidden_size,
+                            "zero_optimization.stage3_param_persistence_threshold": 10
+                            * hidden_size,
+                            "zero_optimization.stage3_prefetch_bucket_size": 0.9
+                            * hidden_size
+                            * hidden_size,
                         }
                     )
 
@@ -254,7 +277,9 @@ class CPOTrainer(Trainer):
         model.eval()
         return model
 
-    def concatenated_inputs(self, batch: Dict[str, Union[List, torch.LongTensor]]) -> Dict[str, torch.LongTensor]:
+    def concatenated_inputs(
+        self, batch: Dict[str, Union[List, torch.LongTensor]]
+    ) -> Dict[str, torch.LongTensor]:
         """Concatenate the chosen and rejected inputs into a single tensor.
 
         Args:
@@ -266,18 +291,32 @@ class CPOTrainer(Trainer):
         concatenated_batch = {}
 
         if self.is_encoder_decoder:
-            max_length = max(batch["chosen_labels"].shape[1], batch["rejected_labels"].shape[1])
+            max_length = max(
+                batch["chosen_labels"].shape[1], batch["rejected_labels"].shape[1]
+            )
         else:
-            max_length = max(batch["chosen_input_ids"].shape[1], batch["rejected_input_ids"].shape[1])
+            max_length = max(
+                batch["chosen_input_ids"].shape[1], batch["rejected_input_ids"].shape[1]
+            )
 
         for k in batch:
             if k.startswith("chosen") and isinstance(batch[k], torch.Tensor):
-                pad_value = self.label_pad_token_id if "labels" in k or self.is_encoder_decoder else self.padding_value
+                pad_value = (
+                    self.label_pad_token_id
+                    if "labels" in k or self.is_encoder_decoder
+                    else self.padding_value
+                )
                 concatenated_key = k.replace("chosen", "concatenated")
-                concatenated_batch[concatenated_key] = pad_to_length(batch[k], max_length, pad_value=pad_value)
+                concatenated_batch[concatenated_key] = pad_to_length(
+                    batch[k], max_length, pad_value=pad_value
+                )
         for k in batch:
             if k.startswith("rejected") and isinstance(batch[k], torch.Tensor):
-                pad_value = self.label_pad_token_id if "labels" in k or self.is_encoder_decoder else self.padding_value
+                pad_value = (
+                    self.label_pad_token_id
+                    if "labels" in k or self.is_encoder_decoder
+                    else self.padding_value
+                )
                 concatenated_key = k.replace("rejected", "concatenated")
                 concatenated_batch[concatenated_key] = torch.cat(
                     (
@@ -288,8 +327,12 @@ class CPOTrainer(Trainer):
                 ).to(self.accelerator.device)
 
         if self.is_encoder_decoder:
-            concatenated_batch["concatenated_input_ids"] = batch["prompt_input_ids"].repeat(2, 1)
-            concatenated_batch["concatenated_attention_mask"] = batch["prompt_attention_mask"].repeat(2, 1)
+            concatenated_batch["concatenated_input_ids"] = batch[
+                "prompt_input_ids"
+            ].repeat(2, 1)
+            concatenated_batch["concatenated_attention_mask"] = batch[
+                "prompt_attention_mask"
+            ].repeat(2, 1)
 
         return concatenated_batch
 
@@ -314,13 +357,15 @@ class CPOTrainer(Trainer):
             The chosen_rewards and rejected_rewards tensors contain the rewards for the chosen and rejected responses, respectively.
         """
         logits = policy_chosen_logps - policy_rejected_logps
-        
+
         if self.loss_type == "sigmoid":
             losses = -F.logsigmoid(self.beta * logits)
         elif self.loss_type == "hinge":
             losses = torch.relu(1 - self.beta * logits)
         else:
-            raise ValueError(f"Unknown loss type: {self.loss_type}. Should be one of ['sigmoid', 'hinge']")
+            raise ValueError(
+                f"Unknown loss type: {self.loss_type}. Should be one of ['sigmoid', 'hinge']"
+            )
 
         chosen_rewards = self.beta * policy_chosen_logps.detach()
         rejected_rewards = self.beta * policy_rejected_logps.detach()
@@ -344,7 +389,9 @@ class CPOTrainer(Trainer):
             A tensor of shape (batch_size,) containing the average/sum log probabilities of the given labels under the given logits.
         """
         if logits.shape[:-1] != labels.shape:
-            raise ValueError("Logits (batch and sequence length dim) and labels must have the same shape.")
+            raise ValueError(
+                "Logits (batch and sequence length dim) and labels must have the same shape."
+            )
 
         if not self.is_encoder_decoder:
             labels = labels[:, 1:].clone()
@@ -354,7 +401,9 @@ class CPOTrainer(Trainer):
         # dummy token; we'll ignore the losses on these tokens later
         labels[labels == self.label_pad_token_id] = 0
 
-        per_token_logps = torch.gather(logits.log_softmax(-1), dim=2, index=labels.unsqueeze(2)).squeeze(2)
+        per_token_logps = torch.gather(
+            logits.log_softmax(-1), dim=2, index=labels.unsqueeze(2)
+        ).squeeze(2)
 
         if average_log_prob:
             return (per_token_logps * loss_mask).sum(-1) / loss_mask.sum(-1)
@@ -363,7 +412,9 @@ class CPOTrainer(Trainer):
 
     def concatenated_forward(
         self, model: nn.Module, batch: Dict[str, Union[List, torch.LongTensor]]
-    ) -> Tuple[torch.FloatTensor, torch.FloatTensor, torch.FloatTensor, torch.FloatTensor]:
+    ) -> Tuple[
+        torch.FloatTensor, torch.FloatTensor, torch.FloatTensor, torch.FloatTensor
+    ]:
         """Run the given model on the given batch of inputs, concatenating the chosen and rejected inputs together.
 
         We do this to avoid doing two forward passes, because it's faster for FSDP.
@@ -374,7 +425,9 @@ class CPOTrainer(Trainer):
         model_kwargs = (
             {
                 "labels": concatenated_batch["concatenated_labels"],
-                "decoder_input_ids": concatenated_batch.pop("concatenated_decoder_input_ids", None),
+                "decoder_input_ids": concatenated_batch.pop(
+                    "concatenated_decoder_input_ids", None
+                ),
             }
             if self.is_encoder_decoder
             else {}
@@ -384,6 +437,7 @@ class CPOTrainer(Trainer):
             attention_mask=concatenated_batch["concatenated_attention_mask"],
             **model_kwargs,
         )
+
         def cross_entropy_loss(logits, labels):
             # Shift so that tokens < n predict n
             shift_logits = logits[..., :-1, :].contiguous()
@@ -396,23 +450,25 @@ class CPOTrainer(Trainer):
             shift_labels = shift_labels.to(shift_logits.device)
             loss = loss_fct(shift_logits, shift_labels)
             return loss
-        
+
         all_logits = outputs.logits.to(torch.float32)
         if isinstance(outputs, dict) and "loss" not in outputs:
             labels = concatenated_batch["concatenated_labels"]
-            loss_chosen = cross_entropy_loss(all_logits[:len_chosen], labels[:len_chosen])
+            loss_chosen = cross_entropy_loss(
+                all_logits[:len_chosen], labels[:len_chosen]
+            )
             # loss_reject = cross_entropy_loss(all_logits[len_chosen:], labels[len_chosen:])
             # clm_loss = 0.5 * (loss_chosen + loss_reject)
             clm_loss = loss_chosen
         else:
             clm_loss = outputs.loss
-        
+
         all_logps = self._get_batch_logps(
             all_logits,
             concatenated_batch["concatenated_labels"],
             average_log_prob=False,
         )
-        
+
         chosen_logps = all_logps[:len_chosen]
         rejected_logps = all_logps[len_chosen:]
 
@@ -450,10 +506,14 @@ class CPOTrainer(Trainer):
         metrics[f"{prefix}rewards/chosen"] = chosen_rewards.cpu().mean()
         metrics[f"{prefix}rewards/rejected"] = rejected_rewards.cpu().mean()
         metrics[f"{prefix}rewards/accuracies"] = reward_accuracies.cpu().mean()
-        metrics[f"{prefix}rewards/margins"] = (chosen_rewards - rejected_rewards).cpu().mean()
+        metrics[f"{prefix}rewards/margins"] = (
+            (chosen_rewards - rejected_rewards).cpu().mean()
+        )
         metrics[f"{prefix}logps/rejected"] = policy_rejected_logps.detach().cpu().mean()
         metrics[f"{prefix}logps/chosen"] = policy_chosen_logps.detach().cpu().mean()
-        metrics[f"{prefix}logits/rejected"] = policy_rejected_logits.detach().cpu().mean()
+        metrics[f"{prefix}logits/rejected"] = (
+            policy_rejected_logits.detach().cpu().mean()
+        )
         metrics[f"{prefix}logits/chosen"] = policy_chosen_logits.detach().cpu().mean()
         metrics[f"{prefix}clm_loss"] = policy_clm_loss.cpu().mean()
 
@@ -480,7 +540,9 @@ class CPOTrainer(Trainer):
             return (loss, metrics)
         return loss
 
-    def get_batch_samples(self, model, batch: Dict[str, torch.LongTensor]) -> Tuple[str, str]:
+    def get_batch_samples(
+        self, model, batch: Dict[str, torch.LongTensor]
+    ) -> Tuple[str, str]:
         """Generate samples from the model and reference model for the given batch of inputs."""
 
         policy_output = model.generate(
@@ -509,11 +571,19 @@ class CPOTrainer(Trainer):
                 pad_token_id=self.tokenizer.pad_token_id,
             )
 
-        policy_output = pad_to_length(policy_output, self.max_length, self.tokenizer.pad_token_id)
-        policy_output_decoded = self.tokenizer.batch_decode(policy_output, skip_special_tokens=True)
+        policy_output = pad_to_length(
+            policy_output, self.max_length, self.tokenizer.pad_token_id
+        )
+        policy_output_decoded = self.tokenizer.batch_decode(
+            policy_output, skip_special_tokens=True
+        )
 
-        reference_output = pad_to_length(reference_output, self.max_length, self.tokenizer.pad_token_id)
-        reference_output_decoded = self.tokenizer.batch_decode(reference_output, skip_special_tokens=True)
+        reference_output = pad_to_length(
+            reference_output, self.max_length, self.tokenizer.pad_token_id
+        )
+        reference_output_decoded = self.tokenizer.batch_decode(
+            reference_output, skip_special_tokens=True
+        )
 
         return policy_output_decoded, reference_output_decoded
 
@@ -550,13 +620,17 @@ class CPOTrainer(Trainer):
             "eval_logits/chosen": metrics["eval_logits/chosen"],
             "eval_logits/rejected": metrics["eval_logits/rejected"],
         }
-        logits = tuple(v.unsqueeze(dim=0) for k, v in logits_dict.items() if k not in ignore_keys)
+        logits = tuple(
+            v.unsqueeze(dim=0) for k, v in logits_dict.items() if k not in ignore_keys
+        )
         logits = torch.stack(logits).mean(axis=1).to(self.accelerator.device)
         labels = torch.zeros(logits.shape[0], device=self.accelerator.device)
 
         return (loss.detach(), logits, labels)
 
-    def store_metrics(self, metrics: Dict[str, float], train_eval: Literal["train", "eval"] = "train") -> None:
+    def store_metrics(
+        self, metrics: Dict[str, float], train_eval: Literal["train", "eval"] = "train"
+    ) -> None:
         for key, value in metrics.items():
             self._stored_metrics[train_eval][key].append(value)
 
@@ -579,14 +653,18 @@ class CPOTrainer(Trainer):
         if self.generate_during_eval:
             # Generate random indices within the range of the total number of samples
             num_samples = len(dataloader.dataset)
-            random_indices = random.sample(range(num_samples), k=self.args.eval_batch_size)
+            random_indices = random.sample(
+                range(num_samples), k=self.args.eval_batch_size
+            )
 
             # Use dataloader.dataset.select to get the random batch without iterating over the DataLoader
             random_batch_dataset = dataloader.dataset.select(random_indices)
             random_batch = self.data_collator(random_batch_dataset)
             random_batch = self._prepare_inputs(random_batch)
 
-            policy_output_decoded, ref_output_decoded = self.get_batch_samples(self.model, random_batch)
+            policy_output_decoded, ref_output_decoded = self.get_batch_samples(
+                self.model, random_batch
+            )
 
             self.log(
                 {
@@ -595,7 +673,9 @@ class CPOTrainer(Trainer):
                         rows=[
                             [prompt, pol[len(prompt) :], ref[len(prompt) :]]
                             for prompt, pol, ref in zip(
-                                random_batch["prompt"], policy_output_decoded, ref_output_decoded
+                                random_batch["prompt"],
+                                policy_output_decoded,
+                                ref_output_decoded,
                             )
                         ],
                     )
@@ -604,7 +684,11 @@ class CPOTrainer(Trainer):
 
         # Base evaluation
         initial_output = super().evaluation_loop(
-            dataloader, description, prediction_loss_only, ignore_keys, metric_key_prefix
+            dataloader,
+            description,
+            prediction_loss_only,
+            ignore_keys,
+            metric_key_prefix,
         )
 
         return initial_output

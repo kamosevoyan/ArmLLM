@@ -1,10 +1,9 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from model import TransformerEncoder
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
-
-from model import TransformerEncoder
 from utils import load_and_preprocess_data, train, validate
 
 
@@ -56,7 +55,9 @@ def main():
     writer = SummaryWriter("../../runs/exp0", flush_secs=5)
 
     for epoch in range(num_epochs):
-        train_acc, train_loss = train(epoch, model, train_loader, criterion, optimizer, device)
+        train_acc, train_loss = train(
+            epoch, model, train_loader, criterion, optimizer, device
+        )
         val_acc, val_loss = validate(model, validation_loader, criterion, device)
         scheduler.step(val_loss)
 

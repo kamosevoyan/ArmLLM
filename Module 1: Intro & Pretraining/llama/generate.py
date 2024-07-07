@@ -1,10 +1,9 @@
 import torch
+from config import ModelArgs
+from model import Transformer
 from torch import device
 from torch.nn import Module
 from transformers import AutoTokenizer
-
-from config import ModelArgs
-from model import Transformer
 
 
 def generate_text_greedy(
@@ -79,7 +78,7 @@ def generate_text_topk(
             proba.scatter_(index=topk_indices, src=topk_values, dim=-1)
             proba = torch.softmax(proba, dim=-1)
             next_token = torch.multinomial(proba, 1)
-            
+
             print(f"next token probability:\t{proba[0, next_token[0]]}")
 
             tokenized_prompt = torch.cat([tokenized_prompt, next_token], dim=-1)
