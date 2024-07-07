@@ -124,6 +124,8 @@ class VectorQuantizer(nn.Module):
         self.n_e = n_e
         self.e_dim = e_dim
         self.beta = beta
+        self.divesity_loss_temp = 1/1000.0
+        self.divesity_loss_beta = 100.0
 
         self.embedding = nn.Embedding(self.n_e, self.e_dim)
         self.embedding.weight.data.uniform_(-1.0 / self.n_e, 1.0 / self.n_e)
@@ -131,11 +133,19 @@ class VectorQuantizer(nn.Module):
         # Add a buffer to track codebook usage
         self.register_buffer("usage", torch.zeros(self.n_e))
 
+    def diversity_loss(self, distances):
+        probs = torch.softmax(-distances/self.divesity_loss_temp, dim=-1)
+        avg_probs = probs.mean(dim=0)        
+        entropy = -(avg_probs * torch.log(avg_probs.clamp(min=1e-5))).sum()
+        max = torch.log(torch.tensor(self.n_e, device=distances.device, dtype=distances.dtype))
+        loss = (max - entropy) / max
+        
+        return loss
+                
     def forward(self, z):
         z = z.permute(0, 2, 3, 1).contiguous()
         z_flattened = z.view(-1, self.e_dim)
 
-        # or maybe swap the order
         distances = torch.cdist(z_flattened, self.embedding.weight)
         
         min_encoding_indices = torch.argmin(distances, dim=1).unsqueeze(1)
@@ -150,16 +160,8 @@ class VectorQuantizer(nn.Module):
         z_q = torch.matmul(min_encodings, self.embedding.weight).view(z.shape)
                 
         loss =  F.mse_loss(z_q.detach(), z)
-        loss += self.beta * F.mse_loss(z.detach(), z_q)
-        
-        ################
-        # calculate prob over distances
-        TEMPERATURE = 1/1000
-        probs = torch.softmax(-distances/TEMPERATURE, dim=-1)
-        dvl = -(-probs * torch.log_softmax(-distances/TEMPERATURE, dim=-1)).sum(dim=-1).mean()
-        print(f"{torch.exp(dvl)}")
-        loss += torch.exp(dvl)
-        ###
+        loss += self.beta * F.mse_loss(z.detach(), z_q)                
+        loss += self.divesity_loss_beta*self.diversity_loss(distances)        
         
         z_q = z + (z_q - z).detach()
         

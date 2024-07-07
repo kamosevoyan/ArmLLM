@@ -1,0 +1,41 @@
+// Computational graph for the feedforward sweep
+digraph DistMult {
+	graph [label=<<B>DistMult</B><br align='left'/>18 tensors total (120.3 KB)<br align='left'/>90500 params total (353.8 KB)<br align='left'/>> labeljust=left labelloc=t ordering=out rankdir=BT]
+	node [ordering=out]
+	input_1 [label=<<b>input_1 (x2)</b><br/>x10 (192 B)<br/>@input.*> color=black fillcolor="#98FB98" fontcolor=black ordering=out shape=oval style="filled,solid"]
+	input_1 -> embedding_1_1 [arrowsize=.7 color=black fontcolor=black headlabel="  In 1-2  " labelfontsize=8 style=solid]
+	input_1 -> view_1_3 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	input_2 [label=<<b>input_2</b><br/>x10 (192 B)<br/>@input.p> color=black fillcolor="#98FB98" fontcolor=black ordering=out shape=oval style="filled,solid"]
+	input_2 -> embedding_2_2 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	input_2 -> view_2_4 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	embedding_1_1 [label=<<b>embedding_1_1 (x5)</b><br/>10x500 (19.7 KB)<br/>params: 135x500<br/>@entity_embeddings> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	embedding_1_1 -> einsum_1_9 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid taillabel="  Out 3-5  "]
+	embedding_2_2 [label=<<b>embedding_2_2</b><br/>10x500 (19.7 KB)<br/>params: 46x500<br/>@predicate_embeddings> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	view_1_3 [label=<<b>view_1_3 (x2)</b><br/>10x1 (208 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	view_1_3 -> cat_1_5 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	view_2_4 [label=<<b>view_2_4</b><br/>10x1 (208 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	view_2_4 -> cat_1_5 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	cat_1_5 [label=<<b>cat_1_5</b><br/>10x3 (368 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	cat_1_5 -> getitem_1_6 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	cat_1_5 -> getitem_2_7 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	cat_1_5 -> getitem_3_8 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	getitem_1_6 [label=<<b>getitem_1_6</b><br/>x10 (192 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	getitem_1_6 -> embedding_1_1 [arrowsize=.7 color=black fontcolor=black headlabel="  In 3  " labelfontsize=8 style=solid]
+	getitem_2_7 [label=<<b>getitem_2_7</b><br/>x10 (192 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	getitem_2_7 -> embedding_1_1 [arrowsize=.7 color=black fontcolor=black headlabel="  In 4  " labelfontsize=8 style=solid]
+	getitem_3_8 [label=<<b>getitem_3_8</b><br/>x10 (192 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	getitem_3_8 -> embedding_1_1 [arrowsize=.7 color=black fontcolor=black headlabel="  In 5  " labelfontsize=8 style=solid]
+	einsum_1_9 [label=<<b>einsum_1_9</b><br/>x10 (152 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	einsum_1_9 -> output_1 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	output_1 [label=<<b>output_1</b><br/>x10 (152 B)<br/>@output> color=black fillcolor="#ff9999" fontcolor=black ordering=out shape=oval style="filled,solid"]
+	{
+		rank=sink
+		output_1
+	}
+	subgraph cluster_entity_embeddings {
+		fillcolor=white label=<<B>@entity_embeddings (x5)</B><br align='left'/>(Embedding)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,dashed"
+	}
+	subgraph cluster_predicate_embeddings {
+		fillcolor=white label=<<B>@predicate_embeddings</B><br align='left'/>(Embedding)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,dashed"
+	}
+}
