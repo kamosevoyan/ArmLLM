@@ -1,10 +1,12 @@
 import torch
 import torch.nn as nn
+from torch.nn import Module
+from torch.optim import Optimizer
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torchvision import transforms
 from datasets import load_dataset
-from tqdm import tqdm
+from torch import Tensor
 import matplotlib.pyplot as plt
 import argparse
 import numpy as np
@@ -20,7 +22,7 @@ def get_emb(sin_inp):
 
 
 class PositionalEncoding2D(nn.Module):
-    def __init__(self, channels):
+    def __init__(self, channels: int):
         """
         :param channels: The last dimension of the tensor you want to apply pos emb to.
         """
@@ -32,7 +34,7 @@ class PositionalEncoding2D(nn.Module):
         self.register_buffer("inv_freq", inv_freq)
         self.register_buffer("cached_penc", None, persistent=False)
 
-    def forward(self, tensor):
+    def forward(self, tensor: Tensor):
         """
         :param tensor: A 4d tensor of size (batch_size, x, y, ch)
         :return: Positional Encoding Matrix of size (batch_size, x, y, ch)
@@ -62,7 +64,11 @@ class PositionalEncoding2D(nn.Module):
 
 class ViTEncoder(nn.Module):
     def __init__(
-        self, in_channels, num_heads, num_layers, embedding_dim, patch_size, image_size
+        self, in_channels: int, 
+        num_heads: int,
+        num_layers: int,
+        embedding_dim,
+        patch_size: int
     ):
         super().__init__()
         self.patch_embed = nn.Conv2d(
@@ -75,7 +81,7 @@ class ViTEncoder(nn.Module):
         )
         self.norm = nn.LayerNorm(embedding_dim)
 
-    def forward(self, x):
+    def forward(self, x: Tensor):
         x = self.patch_embed(x)
         x = x.permute(0, 2, 3, 1)  # (B, H, W, C)
         pos_encoding = self.pos_encoding(x)
@@ -90,7 +96,11 @@ class ViTEncoder(nn.Module):
 
 class ViTDecoder(nn.Module):
     def __init__(
-        self, out_channels, num_heads, num_layers, embedding_dim, patch_size, image_size
+        self, out_channels: int, 
+        num_heads: int,
+        num_layers: int,
+        embedding_dim: int,
+        patch_size: int        
     ):
         super().__init__()
         self.pos_encoding = PositionalEncoding2D(embedding_dim)
@@ -103,7 +113,7 @@ class ViTDecoder(nn.Module):
             embedding_dim, out_channels, kernel_size=patch_size, stride=patch_size
         )
 
-    def forward(self, x):
+    def forward(self, x: Tensor):
         x = x.permute(0, 2, 3, 1)  # (B, H, W, C)
         pos_encoding = self.pos_encoding(x)
         x = x + pos_encoding
@@ -119,10 +129,10 @@ class ViTDecoder(nn.Module):
 
 
 class VectorQuantizer(nn.Module):
-    def __init__(self, n_e, e_dim, beta):
+    def __init__(self, num_embeddings: int, embedding_dim: int, beta: float):
         super(VectorQuantizer, self).__init__()
-        self.n_e = n_e
-        self.e_dim = e_dim
+        self.n_e = num_embeddings
+        self.e_dim = embedding_dim
         self.beta = beta
         self.divesity_loss_temp = 1/1000.0
         self.divesity_loss_beta = 100.0
@@ -133,7 +143,7 @@ class VectorQuantizer(nn.Module):
         # Add a buffer to track codebook usage
         self.register_buffer("usage", torch.zeros(self.n_e))
 
-    def diversity_loss(self, distances):
+    def diversity_loss(self, distances: Tensor):
         probs = torch.softmax(-distances/self.divesity_loss_temp, dim=-1)
         avg_probs = probs.mean(dim=0)        
         entropy = -(avg_probs * torch.log(avg_probs.clamp(min=1e-5))).sum()
@@ -142,7 +152,7 @@ class VectorQuantizer(nn.Module):
         
         return loss
                 
-    def forward(self, z):
+    def forward(self, z: Tensor):
         z = z.permute(0, 2, 3, 1).contiguous()
         z_flattened = z.view(-1, self.e_dim)
 
@@ -176,14 +186,14 @@ class VectorQuantizer(nn.Module):
 class ViT_VQVAE(nn.Module):
     def __init__(
         self,
-        in_channels,
-        latent_dim,
-        num_embeddings,
-        num_heads,
-        num_layers,
-        patch_size,
-        image_size,
-        beta=0.25,
+        in_channels: int,
+        latent_dim: int,
+        num_embeddings: int,
+        num_heads: int,
+        num_layers: int,
+        patch_size: int,
+        image_size: int,
+        beta: float=0.25,
     ):
         super().__init__()
         self.encoder = ViTEncoder(
@@ -194,13 +204,13 @@ class ViT_VQVAE(nn.Module):
             in_channels, num_heads, num_layers, latent_dim, patch_size, image_size
         )
 
-    def forward(self, x):
+    def forward(self, x: Tensor):
         z = self.encoder(x)
         vq_loss, quantized, perplexity, _, _ = self.vq(z)
         x_recon = self.decoder(z)        
         return x_recon, vq_loss, z, quantized, perplexity        
     
-    def calculate_loss(self, x, x_recon, vq_loss):
+    def calculate_loss(self, x: Tensor, x_recon: Tensor, vq_loss: Tensor):
         recon_loss = F.mse_loss(x_recon, x)
         total_loss = recon_loss + vq_loss
         return total_loss, recon_loss, vq_loss
@@ -220,7 +230,7 @@ class ViT_VQVAE(nn.Module):
             print(f"Bin {i+1}: {count.item()}")
 
 
-def load_laion_art_dataset(batch_size, resolution):
+def load_laion_art_dataset(batch_size: int, resolution: int):
     dataset = load_dataset("fantasyfish/laion-art", split="train[:]")
 
     def preprocess_image(example):
@@ -237,7 +247,12 @@ def load_laion_art_dataset(batch_size, resolution):
     return DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=18)
 
 
-def train(model, dataloader, optimizer, num_epochs, device):
+def train(model: Module, 
+          dataloader: DataLoader, 
+          optimizer: Optimizer, 
+          num_epochs: int, 
+          device: torch.device):
+    
     model.to(device)
     for epoch in range(num_epochs):
         model.train()
@@ -260,7 +275,11 @@ def train(model, dataloader, optimizer, num_epochs, device):
             visualize_results(model, x, x_recon, epoch + 1)
 
 
-def visualize_results(model, original, reconstructed, epoch):
+def visualize_results(model: Module, 
+                      original: Tensor, 
+                      reconstructed: Tensor, 
+                      epoch: int):
+    
     Path("./logs").mkdir(exist_ok=True)
     model.eval()
     with torch.no_grad():
